@@ -12,7 +12,11 @@
 int main(int argc, char const *argv[])
 {
 	/*Lectura del input*/
-	
+	int max_time = -1;
+	if (argc == 5){
+		max_time = atoi(argv[4]);
+	}
+	printf("Max time: %d\n", max_time);
 	char *file_name = (char *)argv[1];
 	InputFile *input_file = read_file(file_name);
 
