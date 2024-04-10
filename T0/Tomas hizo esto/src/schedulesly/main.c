@@ -9,8 +9,6 @@ int main(int argc, char const *argv[])
 	char *output_file_name = (char *)argv[2];
 	FILE *output_file = fopen(output_file_name, "a");
 
-	// printf("Numero de args: %d\n", countArgs(input_file, 0));
-
 	int totalGroups = input_file->len - 1;
 	bool isIdle = false;
 	int fileLine;
@@ -18,17 +16,15 @@ int main(int argc, char const *argv[])
 	// Initialize the OS scheduler
 	Scheduler *scheduler = InitializeScheduler(input_file);
 	scheduler->processGroupArray = InitializeProcessGroup(scheduler, input_file, totalGroups);
+	scheduler->totalGroups = totalGroups;
 
 	Queue *activeGroups = (Queue *)calloc(1, sizeof(Queue));
-
-	// printf("n args: %d\n", countArgs(input_file, 0)); // archivo parte desde def qstart
-	// printf("n args: %d\n", countArgs(input_file, 1));
 
 	while (1)
 	{
 		// group 0 is in the line 1 of the input file -> i + 1
 		// group 1 is in the line 2 of the input file
-		for (int group = 0; group < totalGroups; ++group) // Iterate over the groups,
+		for (int group = 0; group < scheduler->totalGroups; ++group) // Iterate over the groups,
 		{
 			fileLine = group + 1;
 			ProcessGroup *processGroup = scheduler->processGroupArray[group];
@@ -55,7 +51,7 @@ int main(int argc, char const *argv[])
 					int arg = 1;
 					int total_n_args = countArgs(input_file, fileLine);
 
-					RunGroup(input_file, fileLine, total_n_args, processGroup, output_file, scheduler->time, arg, 1, 0);
+					// RunGroup(input_file, scheduler, fileLine, total_n_args, processGroup, output_file, scheduler->time, arg, 1, 0);
 				}
 
 				// Create the first process of the group
@@ -87,7 +83,8 @@ int main(int argc, char const *argv[])
 		break;
 	}
 
-	freeScheduler(scheduler);
+	freeScheduler(scheduler, scheduler->totalGroups);
+	freeQueue(activeGroups);
 	input_file_destroy(input_file);
 	fclose(output_file);
 }

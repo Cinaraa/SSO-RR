@@ -7,6 +7,9 @@ Scheduler *InitializeScheduler(InputFile *input_file)
     scheduler->qStart = atoi(input_file->lines[0][0]);
     scheduler->qDelta = atoi(input_file->lines[0][1]);
     scheduler->qMin = atoi(input_file->lines[0][2]);
+    scheduler->nolines = 1;
+    scheduler->ExpectedMAX = 10; // Variable, its the max number of
+    // processes that i would expect to have to handle
     scheduler->time = 0;
 
     return scheduler;
@@ -14,12 +17,14 @@ Scheduler *InitializeScheduler(InputFile *input_file)
 
 ProcessGroup **InitializeProcessGroup(Scheduler *scheduler, InputFile *input_file, int totalGroups)
 {
-
+    // We create an array of process groups
     scheduler->processGroupArray = (ProcessGroup **)calloc(totalGroups, sizeof(ProcessGroup *));
-
+    int max = scheduler->ExpectedMAX;
     for (int i = 1; i < input_file->len; ++i)
     {
         scheduler->processGroupArray[i - 1] = (ProcessGroup *)calloc(1, sizeof(ProcessGroup));
+        // Now each process group inside the array will have its own process array
+        scheduler->processGroupArray[i - 1]->processes = (Process **)calloc(max, sizeof(Process *)); // Create a process group
         scheduler->processGroupArray[i - 1]->gid = i;
         scheduler->processGroupArray[i - 1]->TI = atoi(input_file->lines[i][0]);
         scheduler->processGroupArray[i - 1]->q = scheduler->qStart;
@@ -28,7 +33,7 @@ ProcessGroup **InitializeProcessGroup(Scheduler *scheduler, InputFile *input_fil
     return scheduler->processGroupArray;
 }
 
-Process *CreateProcess(int pid, int ppid, int gid, int CI, int NH)
+Process *CreateProcess(ProcessGroup *processGroup, int pid, int ppid, int gid, int CI, int NH)
 {
     Process *process = (Process *)calloc(1, sizeof(Process));
     process->pid = pid;
@@ -37,6 +42,9 @@ Process *CreateProcess(int pid, int ppid, int gid, int CI, int NH)
     process->CI = CI;
     process->NH = NH;
     process->state = "READY";
+    int index = processGroup->noProcesses;
+    processGroup->processes[index] = process;
+    processGroup->noProcesses += 1;
 
     return process;
 }
@@ -87,33 +95,45 @@ int countArgs(InputFile *inputFile, int fileLine)
 // 7 8 1 4 1 2 0 0 6 3
 //   8   4   2     4  8
 
-int RunGroup(InputFile *inputFile, int fileLine, int total_n_args, ProcessGroup *processGroup, FILE *output_file, int time, int arg, int pid, int ppid)
+int RunGroup(InputFile *inputFile, Scheduler *scheduler, int fileLine, int total_n_args, ProcessGroup *processGroup, FILE *output_file, int time, int arg, int pid, int ppid)
 {
-    // while (arg < total_n_args) // We iterate over the processes of the group
-    // {
     int CI = atoi(inputFile->lines[fileLine][arg]);     // Number of seconds itll work
     int NH = atoi(inputFile->lines[fileLine][arg + 1]); // Number of childs
 
     printf("CI: %d, NH: %d\n", CI, NH);
 
-    Process *process = CreateProcess(pid, ppid, processGroup->gid, CI, NH);
-
-    if (NH == 0)
+    if (processGroup->q >= CI) // There is enough job units to execute the process
     {
-        report_END(output_file, process->pid, time); // end process
-        return 4;                                    // 2
+        processGroup->q -= CI;
+        Process *process = CreateProcess(processGroup, pid, ppid, processGroup->gid, CI, NH);
+        report_ENTER(output_file, process->pid, process->ppid, process->gid, scheduler->time, scheduler->nolines, total_n_args);
+        report_RUN(output_file, process->pid, CI);
+        printf("Process created: pid %d\n", process->pid);
+        scheduler->time += CI; // We add the time the process is being executed
+
+        if (NH == 0)
+        {
+            report_END(output_file, process->pid, time); // end process
+            return 4;                                    // 2
+        }
+        else
+        {
+
+            for (int i = 0; i < NH; i++)
+            { // 8 4
+                pid += 1;
+                arg += RunGroup(inputFile, scheduler, fileLine, total_n_args, processGroup, output_file, time, arg + 2, pid, process->pid);
+                // llamamos con arg + 1 al padre y con arg + 2 al hijo
+            }
+            return 4;
+        }
     }
     else
-    {
-        for (int i = 0; i < NH; i++)
-        { // 8 4
-            pid += 1;
-            arg += RunGroup(inputFile, fileLine, total_n_args, processGroup, output_file, time, arg + 2, pid, process->pid);
-            // llamamos con arg + 1 al padre y con arg + 2 al hijo
-        }
-        return 4;
+    { // There isnt enough job units to execute a new program, new iteration
+        processGroup->iteration += 1;
+        GENERAL_REPORT(output_file, scheduler->processGroupArray, scheduler->time, total_n_args);
+        // check if new groups can enter now
     }
-    // }
 }
 
 void report_IDLE(FILE *output_file, int time)
@@ -162,19 +182,25 @@ void GENERAL_REPORT(FILE *output_file, ProcessGroup **processGroupArray, int tim
     fprintf(output_file, "REPORT END\n");
 }
 
-void freeScheduler(Scheduler *scheduler)
+void freeScheduler(Scheduler *scheduler, int totalGroups)
 {
-    for (int i = 0; i < scheduler->activeGroups; i++)
+    // The idea is to: Free each process that was created in its own processGroup, then
+    // the processGroup, then the processGroupArray and finally the scheduler
+    for (int i = 0; i < totalGroups; i++)
     {
-        for (int i = 0; i < scheduler->activeGroups; i++)
+        for (int j = 0; j < scheduler->processGroupArray[i]->noProcesses; j++)
         {
-            for (int j = 0; j < scheduler->processGroupArray[i]->noProcesses; j++)
-            {
-                free(scheduler->processGroupArray[i]->processes[j]);
-            }
-            free(scheduler->processGroupArray[i]);
+            printf("Process pid %d freed\n", scheduler->processGroupArray[i]->processes[j]->pid);
+            free(scheduler->processGroupArray[i]->processes[j]); // free the process
         }
-        free(scheduler->processGroupArray[i]);
+        free(scheduler->processGroupArray[i]->processes); // free the array of processes
+        free(scheduler->processGroupArray[i]);            // free the processGroup
     }
-    free(scheduler);
+    free(scheduler->processGroupArray); // free the array of processGroups
+    free(scheduler);                    // free the scheduler
+}
+
+void freeQueue(Queue *queue)
+{
+    free(queue);
 }

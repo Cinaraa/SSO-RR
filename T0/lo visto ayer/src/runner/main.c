@@ -30,6 +30,7 @@ int main(int argc, char const *argv[])
 	/*Mostramos el archivo de input en consola*/
 	// create array of processes
 	Process* allProcess[file_len];
+	
 	int noProcess = 0;
 
 	for (int i = 0; i < file_len; ++i)
@@ -45,6 +46,7 @@ int main(int argc, char const *argv[])
 	
 		// create process 
 		allProcess[i] = (Process*)malloc(sizeof(Process));
+		allProcess[i]->order = i;
 		allProcess[i]->arguments = arguments;
 		allProcess[i]->program_name = program_name;
 		allProcess[i]->rejectSIG = false;
@@ -57,6 +59,7 @@ int main(int argc, char const *argv[])
 	
 	bool allDone = false;
 	int procesessDone = 0;
+	Process** Process_in_CPU = calloc(amount, sizeof(Process*));
 	// clock_t clockRunner = clock();
 	while(procesessDone < file_len){
 		if(noProcess > 0){
@@ -70,17 +73,12 @@ int main(int argc, char const *argv[])
 				noProcess--;
 				procesessDone++;
 				// Buscar el proceso padre
-				for (int i = 0; i < file_len; i++){
-					if(allProcess[i]->pid == ret){
+				for (int i_done = 0; i_done < amount; i_done++){
+					if(Process_in_CPU[i_done] != 0 && Process_in_CPU[i_done]->pid == ret){
 						end = clock();
-						allProcess[i]->end = end;
-						printf("Start: %d\n", (int)(allProcess[i]->start));
-						printf("End: %d\n", (int)(allProcess[i]->end));
-						char* program_name = allProcess[i]->program_name;
-						tiempo_tomado = (double)((allProcess[i]->end - allProcess[i]->start) / CLOCKS_PER_SEC);
-						printf("Tiempo %d\n", tiempo_tomado);
-						fprintf(output_file, "%s %f %d\n", program_name, tiempo_tomado, WEXITSTATUS(status_child));
-						printf("Process %d done\n", i);
+						Process_in_CPU[i_done]->time_taken = (double)((end - Process_in_CPU[i_done]->start) / CLOCKS_PER_SEC);
+						Process_in_CPU[i_done]->status = WEXITSTATUS(status_child);
+						Process_in_CPU[i_done] = 0;
 					}
 				}
 			}
@@ -91,41 +89,51 @@ int main(int argc, char const *argv[])
 					break;
 				}
 				if (allProcess[i]->pid == -1){ 
-					printf("Creating process %d\n", i);
+					// printf("Creating process %d\n", i);
 					allProcess[i]->pid = fork();
-					printf("PID: %d\n", allProcess[i]->pid);
+					printf("Process %d created\n", allProcess[i]->pid);
 					allProcess[i]->start = clock();
 					if (allProcess[i]->pid == 0){
 						// child process
-						printf("Child process %d\n", i);
-						char *args[allProcess[i]->num_arguments + 2];
-						args[0] = allProcess[i]->program_name;
+						// printf("Child process %d\n", i);
+						char *args[allProcess[i]->num_arguments + 1];
+						printf("Arguments: %d\n", allProcess[i]->num_arguments);
 						for (int j = 0; j < allProcess[i]->num_arguments; j++){
-							args[j + 1] = allProcess[i]->arguments[j];
+							args[j] = allProcess[i]->arguments[j];
+						printf("Argument: %s\n", allProcess[i]->arguments[j]);
+
 						}
-						args[allProcess[i]->num_arguments + 1] = NULL;
-						if (i == 3){
-							args[1] = "childtime";
-							args[2] = 20;
-							args[1] = "REDES";
-							args[1] = 67;
-							execvp(allProcess[i]->program_name, args);
-						}
-						else{
+						args[allProcess[i]->num_arguments] = NULL;
+
 						if(execvp(allProcess[i]->program_name, args) == -1){
 							printf("Error\n");
-						};}
+						};
 					}
 					else{
 						// parent process
-						allProcess[i]->pid = getpid() + 1;
+						// allProcess[i]->pid = getpid() + 1;
 						noProcess++;
+						printf(" child %d has started at  %d \n",  allProcess[i]->pid, (int)(allProcess[i]->start / CLOCKS_PER_SEC));
+						printf(" child %d program %s \n",  allProcess[i]->pid, allProcess[i]->program_name);
+						for (int p = 0; p < amount; p++){
+							if(!Process_in_CPU[p]){
+								Process_in_CPU[p] = allProcess[i];
+								break;
+							};
+						}
 					}
-					break;
 				}
 			}
 		}
 	}
+	for (int process = 0; process < file_len; process++){
+		char* program_name = allProcess[process]->program_name;
+		int tiempo_tomado = (int) allProcess[process]->time_taken;
+		printf("Tiempo tomado por proceso: %d, %d\n",allProcess[process]->pid ,tiempo_tomado);
+		fprintf(output_file, "%s,%d,%d\n", program_name, tiempo_tomado, allProcess[process]->status);
+		printf("Process %d written \n", allProcess[process]->pid);
+	}
+
 	for (int i = 0; i < file_len; ++i)
 	{
 		free(allProcess[i]);
