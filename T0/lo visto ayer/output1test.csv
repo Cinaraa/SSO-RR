@@ -1,0 +1,7 @@
+
+./testsT0/P1/bin/childfaulter 15.000000 1
+./testsT0/P1/bin/childtime 15.000000 1
+./testsT0/P1/bin/child 15.000000 1
+./testsT0/P1/bin/childtime 15.000000 1
+./testsT0/P1/bin/child 14.000000 1
+./testsT0/P1/bin/childtime 12.000000 1
