@@ -1,0 +1,14 @@
+if(max_time != -1){
+			clock_t still_runnin = clock();
+			printf("Still running %f\n", (double)(still_runnin - clockRunner) / CLOCKS_PER_SEC);
+			double time_spent = (double)(still_runnin - clockRunner) / CLOCKS_PER_SEC;
+			if(time_spent > max_time){
+				printf("Max time reached\n");
+				for (int m = 0; m < amount; m++){
+					if(Process_in_CPU[m]){
+						kill(Process_in_CPU[m]->pid, SIGINT);
+						Process_in_CPU[m] = 0;
+					}
+				}
+			}
+		}
